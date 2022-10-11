@@ -84,6 +84,7 @@ Java8부터 사용하기 시작한 인터페이스. T get(); T를 리턴하는 �
     }
 
 ```
+[issue.[item #03] 싱글턴 클래스의 역직렬화는 말로만 역직렬화인건가요?](https://github.com/now-study/study-effective-java/issues/16)
 
 ## Enum
 
@@ -98,5 +99,7 @@ public enum Elvis {
 ```
 
 코드는 좀 불편하게 느껴지지만 싱글톤을 구현하는 최선의 방법이다. 하지만 이 방법은 Enum 말고 다른 상위 클래스를 상속해야 한다면 사용할 수 없다. (하지만 인터페스는 구현할 수 있다.)
+    
+[issue.[item #03] 싱글턴의 목적으로 열거타입을 사용하는 이유](https://github.com/now-study/study-effective-java/issues/13)
 
 참고 : https://github.com/keesun/study/blob/master/effective-java/item3.md
