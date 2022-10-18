@@ -1,4 +1,4 @@
-package effectivejava;
+package effectivejava.item01;
 
 public class FactoryMethodAndConstructor {
 
