@@ -157,6 +157,6 @@ public int hashCode() {
 
 equals()를 재정의할 때는 반드시 hashcode()도 재정의하자
 
-hashcode()를 정의할 는 반드시 Object의 API 문서에 기술된 일반 규약을 따라라
+hashcode()를 정의할 때는 반드시 Object의 API 문서에 기술된 일반 규약을 따라라
 
 서로 다른 인스턴스라면 되도록 해시코드도 서로 다르게 구현해라
