@@ -68,6 +68,32 @@ public interface PhisicalConstants {
     }
     ```
 
+### 정적 임포트
+
+- 유틸리티 클래스에 정의된 상수를 클라이언트에서 사용하려면 클래스 이름까지 함께 명시해야한다.
+
+    ```java
+    public class Test {
+    	double atom(double mols) {
+    		return PhysicalConstants.AVOGADROS_NUMBER * mols;
+    	}
+    }
+    ```
+
+- 클래스의 상수를 빈번히 사용한다면 정적 임포트(static import)하여 클래스 이름 생략 가능
+
+    ```java
+    import static effectivejava.item22.constantutilityclass.PhysicalConstants.*;
+    
+    public class Test {
+    	double atom(double mols) {
+    		return AVOGADROS_NUMBER * mols;
+    	}
+    }
+    ```
+
+- 코드를 줄이기 위해 정적 임포트 사용하지만 혼란을 야기할 수 있다. 예를 들어 AVOGADROS_NUMBER라는 상수가 다른 Class에 또 있다면..?
+- 호불호가 갈린다 → Coding Convention Check Point~
 
 ## 정리
 
