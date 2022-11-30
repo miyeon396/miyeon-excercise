@@ -3,7 +3,7 @@ package effectivejava.item22;
 import java.io.ObjectInputStream;
 import java.io.ObjectStreamConstants;
 
-public class Calculations implements Constants {
+public class Calculations implements ConstantsUsingInterface {
 
     public static double getReducedPlanckConstant() {
         return PLANCK_CONSTANT / (2 * PI);
