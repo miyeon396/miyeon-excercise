@@ -2,116 +2,178 @@
 
 ---
 
+### 싱글턴 패턴과 직렬화
 
-## Intro
+item3에서 소개된 `싱글턴 패턴` 예제를 살펴보면, 생성자를 호출하지 못하게 막는 방식으로 `인스턴스가 하나만 만들어짐`을 보장했다.
 
-- 한 메서드를 여러 스레드가 동시에 호출 할 때, 그 메서드가 어떻게 동작하느냐는 해당 클래스와 이를 사용하는 클라이언트 사이의 중요한 계약과 같음
-- API 문서에서 아무런 언급이 없다면 클래스 사용자는 나름의 가정을 해야하고, 그 가정이 틀리면 클라이언트 프로그램은 동기화를 충분히 하지 못하거나, 지나치게 한 상태. 두 경우 모두 심각한 오류로 이어질 수 있음
-- API 문서에 synchronized 한정자가 보이는 메서드는 스레드 안전하다고 생각할 수 있지만, 틀린 생각
-  - 메서드 선언에 synchronized 한정자를 선언할지는 구현 이슈일 뿐 API에 속하지 않는다.
-  - 이것만으로는 그 메서드가 스레드 안전하다고 믿기 어렵다
-  - Synchronized 유무로 스레드 안전성을 알 수 있다는 주장은 스레드 안전성은 모 아니면 도라는 오해에 뿌리를 둔 것 → 스레드 안전성은 수준이 나뉨
-- 멀티 스레드 환경에서도 API를 안전하게 사용하게 하려면 클래스가 지원하는 스레드 안전성 수준을 정확히 명시해야한다.
+```java
+// 인스턴스가 하나만 만들어짐을 보장하는 클래스
+public class Elvis {
+    public static final Elvis INSTANCE = new Elvis();
+    private Elvis() { }
 
-## 스레드 안전성 수준
+    public void leaveTheBuilding() { ... }
+}
+```
 
-안전성이 높은 순서대로
+- 하지만 이 클래스는 Serializable을 추가하는 순간 더이상 싱글턴이 아니게 된다.
+- 기본 직렬화를 사용하지 않아도, readObject 메서드를 제공하지 않아도 소용 없다.
+- 어떤 readObject 메서드를 사용하더라도 이 클래스가 초기화 될 때 만들어진 인스턴스와는 `별개인 인스턴스를 반환`하게 된다.
 
-### 1. 불변 immutable
+### 싱글턴 속성을 유지하는 방법 - readResolve() Method
 
-- 이 클래스의 인스턴스는 마치 상수와 같아서 외부 동기화도 필요 없다
-- String, Long, BigInteger가 대표적이다
+- readResolve 메서드를 사용하면 readObject 메서드가 만들어낸 인스턴스를 다른것으로 대체할 수 있다.
+- 역직렬화 후 새로 생성된 객체를 인수로 readResolve가 호출되고, 이 메서드가 반환한 객체 참조가 새로 생성된 객체를 대신해 반환한다.
+- 이때 새로 생성된 객체의 참조는 유지 되지 않아 GC의 대상이 된다.
 
-### 2. 무조건적 스레드 안전 Unconditionally Thread-Safe
+![Untitled](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/b7260702-ca9d-4eea-9d28-73562718f3d3/Untitled.png)
 
-- 이 클래스의 인스턴스는 수정될 수 있으나, 내부에서 충분히 동기화 하여 별도의 외부 동기화 없이 동시 사용해도 안전하다.
-- AtomicLong, ConcurrentHashMap이 여기에 속함
-
-### 3. 조건부 스레드 안전 Conditionally Thread-Safe
-
-- 무조건적 스레드 안전과 같으나, 일부 메서드는 동시에 사용하려면 외부 동기화가 필요하다.
-- Collections.synchronized 래퍼 메서드가 반환한 컬렉션들이 여기 속함
-
-### 4. 스레드 안전하지 않음 Not Thread-Safe
-
-- 이 클래스의 인스턴스는 수정될 수 있다.
-- 동시에 사용할려면 각각의 메서드 호출을 클라이언트가 선택한 외부 동기화 매커니즘으로 감싸야한다.
-- ArrayList, HashMap과 같은 기본 컬렉션이 여기 속한다.
-
-### 5. 쓰레드 적대적 Thread-Hostile
-
-- 이 클래스는 모든 메서드 호출을 외부 동기화로 감싸더라도 멀티스레드 환경에서 안전하지 않다.
-- 이 수준의 클래스는 일반적으로 정적 데이터를 아무 동기화 없이 수정한다.
-- 스레드 적대적으로 밝혀진 클래스나 메서드는 일반적으로 문제를 고쳐 재배포하거나 deprecated API로 지정한다.
-
-## 스레드 안전성 애너테이션
-
-- @Immutable
-  - 불변
-- @ThreadSafe
-  - 무조건적 스레드 안전, 조건부 스레드 안전이 모두 여기에 속함
-- @NotThreadSafe
-  - 스레드 안전하지 않음
-
-## 스레드 안전성 수준 문서화
-
-- `조건부 스레드 안전`한 클래스는 주의해서 문서화 해야한다
-  - 어떤 순서로 호출할 때 외부의 동기화가 필요한지, 그리고 그 순서로 호출하면 어떤 락 혹은 (드물게)락들을 얻어야하는지 알려줘야함
-  - 일반적으로 인스턴스 자체를 락으로 얻지만 예외도 있음
-    - ex) Collections.synchronizedMap이 있고, synchronizedMap이 반환한 맵의 컬렉션 뷰를 순회하려면 반드시 그 맵을 락으로 사용해 수동으로 동기화 해야함 ???
-
-        ```java
-        // Collections.synchronizedMap API 예시
-        //synchornizedMap이 반환한 맵의 컬렉션 뷰를 순회하려면 반드시 그 맵을 락으로 사용해 수동으로 동기화하라.
-            
-        Map<K, V> m = Collections.synchronizedMap(new HashMap<>());
-        Set<K> s = m.keySet(); // 동기화 불록 밖에 있어도 된다.
-            
-        synchronized(m) {  // s가 아닌 m을 사용해 동기화 해야한다!
-            for (K key : s)
-                key.f();
-        }
-        ```
-
-- 클래스의 스레드 안전성은 보통 클래스 `문서화 주석`에 기재. 독특한 특성의 메서드라면 별도로 해당 메서드의 주석에 기재
-- 열거 타입은 굳이 불변이라고 쓰지 않아도 된다.
-- 반환 타입만으로는 명확히 알 수 없는 정적 팩터리라면 자신이 반환하는 객체의 `스레드 안전성을 반드시 문서`화해야함
-
-## 공개 락
-
-- 클래스가 외부에서 사용할 수 있는 락을 제공하면 클라이언트에서 일련의 메서드 호출을 원자적으로 수행할 수 있습니다.
-- 하지만 유연성에는 대가가 따름. 내부에서 처리하려는 고성능 동시성 제어 메커니즘과 혼용이 불가
-  - ConcurrentHashMap과 같은 동시성 컬렉션과 함께 사용할 수 없음
-- 클라이언트가 공개 락을 쥐고 놓지 않는 서비스 거부 공격(denial-of-service attack)을 수행할 수도 있다.
-  - 서비스 거부 공격을 막으려면, synchronized 메서드 대신 비공개 락 객체를 사용해야 함
-
-## 비공개 락
-
-- 비공개 락 객체의 관용구. 서비스 거부 공격을 막아줌
+- 이 메서드는 역직렬화 한 객체는 무시하고 클래스 초기화 때 만들어진 Elvis 인스턴스를 반환한다. 따라서 Elvis 인스턴스의 직렬화 형태는 아무런 실 데이터를 가질 이유가 없으니, 모든 필드를 `transient`로 선언해야한다.
 
     ```java
-    private final Object lock = new Object();
-    
-    public void foo() {
-    	synchronized(lock) {
-    		...
-    	}
+    // 진짜 Elvis를 반환하고, 가짜 Elvis는 GC에 맡긴다.
+    private Object readResolve() {
+        // 기존에 생성된 인스턴스를 반환한다.
+        return INSTANCE;
     }
     ```
 
-- 비공개 락 객체는 클래스 바깥에서는 볼 수 없다. 그러니 클라이언트가 그 객체의 동기화에 관여할 수 없다.
-  - 사실상 락 객체를 동기화 대상 객체 안으로 캡슐화한 것이라 볼 수 있다.
-- 비공개 락 객체 관용구는 `무조건적 스레드 안전 클래스`에서만 사용할 수 있다.
-  - 조건부 스레드 안전 클레스에서는 특정 호출 순서에 필요한 락이 무엇인지 알려주어야한다. 그러니 이 관용구를 사용하지 못함
-- 비공개 락 객체 관용구는 `상속용`으로 설계한 클래스에 특히 잘 맞음
-  - 상속용 클래스에서 자신의 인스턴스를 락으로 사용하게 되면 하위 클래스는 아주 쉽고 의도치 않았더라도 기반 클래스의 동작을 방해할 수 있음.
 
-## 정리
+### 필드를 Transient로 선언하지 않으면 발생하는 취약점
 
-- 모든 클래스가 자신의 스레드 안전성 정보를 명확히 문서화 해야한다
-  - 정확한 언어로 명확히 설명하거나 스레드 안전성 애너테이션을 사용
-- synchronized 한정자는 문서화와 관련 없다.
-- 조건부 스레드 안전 클래스는 메서드를 어떤 순서로 호출할 때 외부 동기화가 요구되는지, 그때 어떤 락을 얻어야하는지 알려주자
-- 무조건적 스레드 안전 클래스 작성 시 synchronizzed 메서드가 아닌 비공개 락 객체를 사용하자
-  - 이렇게 하면 클라이언트나 하위 클래스에서 동기화 매커니즘을 깨뜨리는 것을 방지할 수 있다.
-  - 필요 시 다음에 더 정교한 동시성 제어 매커니즘으로 재구현하자.
+- readResolve를 인스턴스 통제 목적으로 사용한다면 객체 참조 타입 인스턴스 필드는 모두 `transient`로 선언하자
+- 이렇게 하지 않으면 역직렬화된 객체 참조를 공격할 여지가 남음
+- 공격방법
+  1. readResolve 메서드와 인스턴스 필드 하나를 포함한 도둑 클래스를 만든다.
+  2. 도둑 클래스의 `인스턴스 필드`는 도둑이 숨길 `직렬화된 싱글턴을 참조`하는 역할
+  3. 직렬화된 스트림에서 싱글턴의 비휘발성 필드를 도둑의 인스턴스 필드로 교체한다.
+     → 싱글턴은 도둑을 참조하고 도둑은 싱글턴을 참조하는 순환고리가 만들어짐
+  4. 싱글턴이 도둑을 포함하므로 역직렬화시 도둑 클래스의 readResolve가 먼저 호출된다.
+  5. 도둑의 readResolve메서드가 실행 될 때 도둑클래스의 인스턴스 필드에는 역직렬화 도중의 싱글턴의 참조가 담겨있게 된다.
+  6. 도둑 클래스의 readResolve 메서드는 인스턴스 필드가 참조한 값을 정적 필드로 복사한다. (readResolve가 끝난 후에도 참조할 수 있도록 함)
+  7. 싱글턴은 도둑이 숨긴 transient가 아닌 필드의 원래 타입에 맞는 값을 반환한다.
+  8. 이 과정을 생략하면 직렬화 시스템이 도둑의 참조를 이 필드에 저장하려 할 때 ClassCastException이 발생한다.
+
+### 잘못된 싱글턴을 통해 구체적으로 확인 (위의 예제)
+
+- transient가 아닌 참조 필드를 가지는 싱글턴
+
+```java
+public class Elvis implements Serializable {
+  public static final Elvis INSTANCE = new Elvis();
+  private Elvis() { }
+
+  private String[] favoriteSongs = {"Hound Dog", "Heartbreak Hotel"};
+
+  public void printFavorites() {
+    System.out.println(Arrays.toString(favoriteSongs));
+  }
+
+  private Object readResolve() {
+    return INSTANCE;
+  }
+}
+```
+
+### 싱글턴의 비휘발성 인스턴스 필드를 훔치려는 도둑 클래스
+
+- readResolve 메서드와 인스턴스 필드 하나를 포함한 도둑 클래스
+- 도둑 클래스의 `인스턴스 필드`는 도둑이 숨길 `직렬화된 싱글턴을 참조`하는 역할
+
+```java
+public class ElvisStealer implements Serializable {
+  private static final long serialVersionUID = 0;
+  static Elvis impersonator;
+  private Elvis payload;
+
+  private Object readResolve() {
+    // resolve되기 전의 Elvis 인스턴스의 참조를 저장
+    impersonator = payload;
+    // favoriteSongs 필드에 맞는 타입의 객체를 반환
+    return new String[] {"A fool Such as I"};
+  }
+}
+```
+
+### 직렬화의 약점을 이용해 싱글턴 객체를 2개 생성
+
+- 수작업으로 만든 스트림을 이용해 2개의 싱글턴 인스턴스를 만듦
+
+```java
+public class ElvisImpersonator {
+  private static final byte[] serializedForm = new byte[]{
+      (byte) 0xac, (byte) 0xed, 0x00, 0x05, 0x73, 0x72, 0x00, 0x05,
+      // 코드 생략
+  };
+
+  private static Object deserialize(byte[] sf) {
+        try (ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(sf)) {
+      try (ObjectInputStream objectInputStream = new ObjectInputStream(byteArrayInputStream)) {
+        return objectInputStream.readObject();
+      } catch (IOException | ClassNotFoundException e) {
+        throw new IllegalArgumentException(e);
+      }
+  }
+
+  public static void main(String[] args) {
+    // ElvisStealer.impersonator 를 초기화한 다음,
+    // 진짜 Elvis(즉, Elvis.INSTANCE)를 반환
+    Elvis elvis = (Elvis) deserialize(serializedForm);
+    Elvis impersonator = ElvisStealer.impersonator;
+    elvis.printFavorites(); // [Hound Dog, Heartbreak Hotel]
+    impersonator.printFavorites(); // [A fool Such as I]
+  }
+}
+```
+
+- 결과
+  Hound Dog, HeartBreak Hotel
+  A fool Such as I
+- 싱글톤으로 설계 했지만 서로 다른 2개의 Elvis 인스턴스 생성을 증명
+- 이유
+  1. private String [] favoriteSongs = {"Hound Dog", "Heartbreak Hotel"};라는 non-transient 참조 필드가 있다.
+  2. **직렬화된 스트림에서 위 필드를 이 도둑 클래스의 인스턴스로 교체한다.**
+  3. 바이트 코드 자체에서 싱글턴(Elvis)의 비휘발성 필드(String [] favoriteSongs) 부분을 도둑의 인스턴스(ElvisStealer)로 교체한다.
+  4. 바이트 코드를 바꾸면서 Elvis(new).favoriteSongs = ElvisStealer(new)가 되어있는 상황에서 readResolve를 호출하게 되면 **Elvis(new).favoriteSongs = ElvisStealer(new).readResolve() 와 같은 흐름으로 코드가 실행**이 된다.
+  5. 따라서 Elvis 역직렬화를 할 때 String[] favoriteSong을 역직렬화 하려고 보니 ElvisStealer로 참조가 걸려있어서 EvlisStealer로 readResolve 코드를 호출하게 된다.
+  6. 결국 ElvisStealer의 readResolve에서 반환하는 String 이 반환되는 구조이다.
+
+## 해결 방법
+
+### Enum을 활용
+
+- 위 예제의 필드를 transient로 선언하여 문제를 해결할 수도 있지만, Elvis 원소를 열거 타입으로 바꾸는게 더 좋은 해결 방법
+- 직렬화 가능한 인스턴스 통제 클래스를 열거 타입을 이용해 구현하면 선언한 상수 외의 다른 객체는 존재하지 않음을 자바가 보장 (AccessibleObject.setAccessible 메서드 같은 리플랙션을 사용하는 것을 제외하고)
+- 다음과 같이 열거 타입(Enum)으로 만들어진 Elvis는 전통적인 싱글턴보다 우수
+
+```java
+	public enum Elvis {
+    INSTANCE;
+
+    private String[] favoriteSongs = { "Hound Dog", "Heartbreak Hotel" };
+
+    public void printFavorites() {
+        System.out.println(Arrays.toString(favoriteSongs));
+    }
+}
+
+```
+
+- 물론 readResolve를 사용하는 방식이 필요할 때도 있다. 직렬화 가능 인스턴스 통제 클래스를 작성할 때, 컴파일 타임에 어떤 인스턴스 들이 있는지 알 수 없는 상황이라면, 열거 타입으로 표현하는 것이 불가능하기 때문
+
+### readResolve 메서드의 접근성
+
+- readResolve 메서드의 접근성은 매우 중요
+- final 클래스에서 readResolve 메서드는 private 여야한다.
+
+### final이 아닌 클래스에서의 주의사항
+
+- private로 선언하면 하위 클래스에서 사용할 수 없다.
+- package-private으로 선언하면 같은 패키지에 속한 하위 클래스에서만 사용할 수 있다.
+- protected나 public이면서 하위 클래스에서 재정의 하지 않았다면, 하위 클래스의 인스턴스를 역직렬화할 때 상위 클래스의 인스턴스를 생성하여 ClassCastException이 발생할 수 있다.
+
+### 정리
+
+- 불변식을 지키기 위해 인스턴스를 통제해야한다면 가능한 `열거 타입`을 사용하자
+- 열거 타입 사용이 여의치 않은 상황에 직렬화와 인스턴스 통제가 필요하다면 `readResolve 메서드`를 사용하자
+- 단, 그 클래스의 모든 참조 타입 인스턴스 필드에 `transient 한정자를 선언`해야한다.
